@@ -31,7 +31,8 @@ import numpy as np
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', '--classifier', help='Path to face detection cascade classifier xml.', default='../haarcascades/haarcascade_frontalface_default.xml')
-    parser.add_argument('-d', '--distance', help='Scale eye-to-eye distance to this setting in pixels.', default=180)
+    parser.add_argument('-e', '--eyeclassifier', help='Path to eye detection cascade classifier xml.', default='../haarcascades/haarcascade_eye.xml')
+    parser.add_argument('-d', '--distance', help='Scale eye-to-eye distance to this setting in pixels.', default=128)
     parser.add_argument('image', help='Image file to analyze.')
     args = parser.parse_args()
 
@@ -39,7 +40,7 @@ def main():
     for (roi_gray, roi_color) in find_all_faces(args.image, args.classifier):
 
         # Extract the features from this roi
-        features = find_face_features(roi_gray, roi_color)
+        features = find_face_features(roi_gray, roi_color, args.eyeclassifier)
 
         # Mark some important features
         cv2.rectangle(roi_color,
@@ -79,6 +80,10 @@ def find_all_faces(path, classifier):
     rois = []
     for (x,y,w,h) in faces:
         rois.append((gray[y:y+h, x:x+w], img[y:y+h, x:x+w]))
+
+    if len(rois) is 0:
+        print "Note: no faces detected."
+
     return rois
 
 #---------------------------------------
@@ -86,17 +91,37 @@ def find_all_faces(path, classifier):
 #
 # Some machine learning algorithm that extracts face features given a roi
 #---------------------------------------
-def find_face_features(roi_gray, roi_color):
+def find_face_features(roi_gray, roi_color, classifier):
 
-    # TEMPORARY IMPLEMENTATION! REWRITE!!!
+    # TEMPORARY IMPLEMENTATION! Need to find a way to automatically detect nose tip and eye centers.
 
     width = len(roi_gray)
     height = len(roi_gray[0])
-    return {
-        "left_eye":(width/4, height/4),
-        "right_eye":(width*3/4, height/4 + 40),
-        "nose_tip":(width/2, height*3/4)
+    ret = {
+        "left_eye":(0, 0),
+        "right_eye":(0, 0),
+        "nose_tip":(width/2, height*3/4) #arbitrary
     }
+
+    eye_cascade = cv2.CascadeClassifier(classifier)
+    eyes = eye_cascade.detectMultiScale(roi_gray)
+
+    if len(eyes) is not 2:
+        print "Note: Didn't find exactly two eyes."
+        ret["left_eye"] = (width/4, height/4)
+        ret["right_eye"] = (width*3/4, height/4)
+    else:
+        (ex,ey,ew,eh) = eyes[0]
+        ret["left_eye"] = (ex + ew/2, ey + eh/2)
+        (ex,ey,ew,eh) = eyes[1]
+        ret["right_eye"] = (ex + ew/2, ey + eh/2)
+
+        if ret["right_eye"] < ret["left_eye"]:
+            temp = ret["left_eye"]
+            ret["left_eye"] = ret["right_eye"]
+            ret["right_eye"] = temp
+
+    return ret
 
 #---------------------------------------
 # align_eyes
