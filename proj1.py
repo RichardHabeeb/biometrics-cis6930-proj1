@@ -30,47 +30,52 @@ import numpy as np
 #---------------------------------------
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--classifier', help='Path to face detection cascade classifier xml.', default='../haarcascades/haarcascade_frontalface_default.xml')
-    parser.add_argument('-e', '--eyeclassifier', help='Path to eye detection cascade classifier xml.', default='../haarcascades/haarcascade_eye.xml')
+    parser.add_argument('-c', '--classifier', help='Path to face detection cascade classifier xml.', default='haarcascades/haarcascade_frontalface_default.xml')
+    parser.add_argument('-e', '--eyeclassifier', help='Path to eye detection cascade classifier xml.', default='haarcascades/haarcascade_eye.xml')
+    parser.add_argument('-n', '--noseclassifier', help='Path to nose detection cascade classifier xml.', default='haarcascades/haarcascade_mcs_nose.xml')
+    parser.add_argument('-m', '--mouthclassifier', help='Path to mouth detection cascade classifier xml.', default='haarcascades/haarcascade_mcs_mouth.xml')
     parser.add_argument('-d', '--distance', help='Scale eye-to-eye distance to this setting in pixels.', default=128)
     parser.add_argument('image', help='Image file to analyze.')
     args = parser.parse_args()
 
-    # Locate all the faces in the image
+    # Locate all the rois in the image which could have a face, this helps narrow the
     for (roi_gray, roi_color) in find_all_faces(args.image, args.classifier):
 
         # Extract the features from this roi
-        features = find_face_features(roi_gray, roi_color, args.eyeclassifier)
+        features = find_face_features(roi_gray, roi_color, args.eyeclassifier, args.noseclassifier, args.mouthclassifier)
 
-        # Mark some important features
-        cv2.rectangle(roi_color,
-            (features['left_eye'][0], features['left_eye'][1]),
-            (features['left_eye'][0] + 2, features['left_eye'][1] + 2),
-            (0, 255, 0), 2)
+        # Determine if this roi is a face
+        if 'left_eye' in features and 'right_eye' in features and 'nose_tip' in features:
+            print 'Face Identified.'
 
-        cv2.rectangle(roi_color,
-            (features['right_eye'][0], features['right_eye'][1]),
-            (features['right_eye'][0] + 2, features['right_eye'][1] + 2),
-            (0, 255, 0), 2)
+            cv2.rectangle(roi_color,
+                (features['left_eye'][0], features['left_eye'][1]),
+                (features['left_eye'][0] + 2, features['left_eye'][1] + 2),
+                (0, 255, 0), 2)
 
-        cv2.rectangle(roi_color,
-            (features['nose_tip'][0], features['nose_tip'][1]),
-            (features['nose_tip'][0] + 2, features['nose_tip'][1] + 2),
-            (0, 255, 0), 2)
+            cv2.rectangle(roi_color,
+                (features['right_eye'][0], features['right_eye'][1]),
+                (features['right_eye'][0] + 2, features['right_eye'][1] + 2),
+                (0, 255, 0), 2)
 
-        # Rotate the image to align the eyes. Recompute the new features
-        rotated_color, new_features = align_eyes(features, roi_color, args.distance)
+            cv2.rectangle(roi_color,
+                (features['nose_tip'][0], features['nose_tip'][1]),
+                (features['nose_tip'][0] + 2, features['nose_tip'][1] + 2),
+                (255, 127, 127), 2)
 
-        # Mask off everything but the face ellipse
-        masked_roi = mask_face(new_features, rotated_color)
+            # Rotate the image to align the eyes. Recompute the new features
+            rotated_color, new_features = align_eyes(features, roi_color, args.distance)
 
-        display_image(masked_roi)
+            # Mask off everything but the face ellipse
+            masked_roi = mask_face(new_features, rotated_color)
+
+            display_image(masked_roi)
 
 
 #---------------------------------------
 # find_all_faces
 #
-# Returns a list of rois.
+# Returns a list of rois
 #---------------------------------------
 def find_all_faces(path, classifier):
     face_cascade = cv2.CascadeClassifier(classifier)
@@ -91,34 +96,42 @@ def find_all_faces(path, classifier):
 #
 # Some machine learning algorithm that extracts face features given a roi
 #---------------------------------------
-def find_face_features(roi_gray, roi_color, classifier):
-
-    # TEMPORARY IMPLEMENTATION! Need to find a way to automatically detect nose tip and eye centers.
-
+def find_face_features(roi_gray, roi_color, eye_classifier, nose_classifier, mouth_classifier):
     width = len(roi_gray)
     height = len(roi_gray[0])
-    ret = {
-        "left_eye":(width/4, height/4), #arbitrary
-        "right_eye":(width*3/4, height/4), #arbitrary
-        "nose_tip":(width/2, height*5/8) #arbitrary
-    }
+    ret = {}
 
-    eye_cascade = cv2.CascadeClassifier(classifier)
+    eye_cascade = cv2.CascadeClassifier(eye_classifier)
+    nose_cascade = cv2.CascadeClassifier(nose_classifier)
+    mouth_cascade = cv2.CascadeClassifier(mouth_classifier)
+
     eyes = eye_cascade.detectMultiScale(roi_gray)
+    noses = nose_cascade.detectMultiScale(roi_gray)
+    mouths = mouth_cascade.detectMultiScale(roi_gray)
 
     if len(eyes) is not 2:
         print "Note: Didn't find exactly two eyes."
-
     else:
-        (ex,ey,ew,eh) = eyes[0]
+        (ex, ey, ew, eh) = eyes[0]
         ret["left_eye"] = (ex + ew/2, ey + eh/2)
-        (ex,ey,ew,eh) = eyes[1]
+        (ex, ey, ew, eh) = eyes[1]
         ret["right_eye"] = (ex + ew/2, ey + eh/2)
 
         if ret["right_eye"] < ret["left_eye"]:
             temp = ret["left_eye"]
             ret["left_eye"] = ret["right_eye"]
             ret["right_eye"] = temp
+
+    if len(noses) is not 1:
+        print "Note: Didn't find exactly one nose: " + str(len(noses))
+    else:
+        (nx, ny, nw, nh) = noses[0]
+        ret["nose_tip"] = (nx + nw/2, ny + nh/2)
+
+    #Looking at mouths added too much noise.
+
+    # if len(mouths) is not 1:
+    #     print "Note: Didn't find exactly one mouth." + str(len(mouths))
 
     return ret
 
