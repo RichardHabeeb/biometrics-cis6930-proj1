@@ -151,6 +151,9 @@ def align_eyes(features, roi, eye_distance_target):
     correction_angle = math.acos((x2-x1) / eye_distance)
     scale = eye_distance_target/eye_distance
 
+    if y1 > y2:
+        correction_angle = -correction_angle
+
     M = cv2.getRotationMatrix2D((width/2, height/2), 180*correction_angle/math.pi, scale)
 
     res = cv2.transform(np.array([[
