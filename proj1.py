@@ -98,9 +98,9 @@ def find_face_features(roi_gray, roi_color, classifier):
     width = len(roi_gray)
     height = len(roi_gray[0])
     ret = {
-        "left_eye":(0, 0),
-        "right_eye":(0, 0),
-        "nose_tip":(width/2, height*3/4) #arbitrary
+        "left_eye":(width/4, height/4), #arbitrary
+        "right_eye":(width*3/4, height/4), #arbitrary
+        "nose_tip":(width/2, height*5/8) #arbitrary
     }
 
     eye_cascade = cv2.CascadeClassifier(classifier)
@@ -108,8 +108,7 @@ def find_face_features(roi_gray, roi_color, classifier):
 
     if len(eyes) is not 2:
         print "Note: Didn't find exactly two eyes."
-        ret["left_eye"] = (width/4, height/4)
-        ret["right_eye"] = (width*3/4, height/4)
+
     else:
         (ex,ey,ew,eh) = eyes[0]
         ret["left_eye"] = (ex + ew/2, ey + eh/2)
@@ -166,7 +165,7 @@ def mask_face(features, roi):
     cv2.ellipse(
         mask,
         ((features['right_eye'][0] + features['left_eye'][0])/2, (features['nose_tip'][1] + features['left_eye'][1])/2),
-        ((features['right_eye'][0] - features['left_eye'][0])*3/4, (features['nose_tip'][1] - features['left_eye'][1])), #magic numbers
+        ((features['right_eye'][0] - features['left_eye'][0]), (features['nose_tip'][1] - features['left_eye'][1])*3/2), #magic numbers
         0, 0, 360, (255,255,255), -1)
     return cv2.bitwise_and(roi, roi, mask=mask)
 
